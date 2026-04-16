@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Fit to Last — Client Portal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --black: #0d0d0d; --white: #f7f5f0; --gold: #c9a84c;
+      --gold2: #e8c96a; --mid: #1e1e1e; --muted: #666; --radius: 12px;
+    }
+    html, body { height: 100%; background: var(--black); color: var(--white); font-family: 'DM Sans', sans-serif; font-weight: 300; }
+
+    /* ── LOGIN ── */
+    #login-screen {
+      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(201,168,76,0.12) 0%, transparent 70%), var(--black);
+      padding: 2rem;
+    }
+    .login-card {
+      width: 100%; max-width: 420px; background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(201,168,76,0.2); border-radius: 20px;
+      padding: 3rem 2.5rem; backdrop-filter: blur(12px); animation: fadeUp 0.6s ease both;
+    }
+    @keyframes fadeUp { from { opacity:0; transform:translateY(24px); } to { opacity:1; transform:translateY(0); } }
+    .login-logo { font-family:'Playfair Display',serif; font-size:1.6rem; font-weight:600; color:var(--gold); margin-bottom:0.4rem; }
+    .login-tagline { font-size:0.82rem; color:var(--muted); letter-spacing:0.08em; text-transform:uppercase; margin-bottom:2.5rem; }
+    .login-card h2 { font-family:'Playfair Display',serif; font-size:1.5rem; font-weight:400; margin-bottom:0.5rem; }
+    .login-card p { font-size:0.88rem; color:var(--muted); margin-bottom:2rem; line-height:1.6; }
+    .input-group { display:flex; flex-direction:column; gap:0.75rem; margin-bottom:1.25rem; }
+    .input-group label { font-size:0.78rem; letter-spacing:0.08em; text-transform:uppercase; color:var(--muted); }
+    .input-group input {
+      background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1);
+      border-radius:var(--radius); padding:0.85rem 1rem; color:var(--white);
+      font-family:'DM Sans',sans-serif; font-size:0.95rem; outline:none; transition:border-color 0.2s;
+    }
+    .input-group input:focus { border-color:var(--gold); }
+    .input-group input::placeholder { color:#444; }
+    .btn-primary {
+      width:100%; padding:0.9rem; background:linear-gradient(135deg,var(--gold),var(--gold2));
+      border:none; border-radius:var(--radius); color:var(--black);
+      font-family:'DM Sans',sans-serif; font-weight:500; font-size:0.95rem;
+      cursor:pointer; transition:opacity 0.2s,transform 0.15s;
+    }
+    .btn-primary:hover { opacity:0.9; transform:translateY(-1px); }
+    .btn-primary:disabled { opacity:0.5; cursor:not-allowed; }
+    .message { margin-top:1.25rem; padding:0.85rem 1rem; border-radius:var(--radius); font-size:0.88rem; line-height:1.5; display:none; }
+    .message.success { background:rgba(201,168,76,0.12); border:1px solid rgba(201,168,76,0.3); color:var(--gold2); display:block; }
+    .message.error { background:rgba(220,60,60,0.1); border:1px solid rgba(220,60,60,0.3); color:#f08080; display:block; }
+
+    /* ── PORTAL ── */
+    #portal-screen { display:none; flex-direction:column; min-height:100vh; }
+    .portal-header {
+      background:rgba(255,255,255,0.02); border-bottom:1px solid rgba(201,168,76,0.15);
+      padding:1.25rem 2.5rem; display:flex; align-items:center; justify-content:space-between; gap:1.5rem;
+      position: static;
+    }
+    .header-logo { height:48px; width:auto; object-fit:contain; border-radius:6px; }
+    .header-brand { font-family:'Playfair Display',serif; font-size:1.25rem; color:var(--gold); white-space:nowrap; }
+    .header-welcome { display:flex; align-items:center; gap:1rem; animation:fadeUp 0.5s ease both; }
+    .member-photo { width:44px; height:44px; border-radius:50%; object-fit:cover; border:2px solid var(--gold); background:var(--mid); flex-shrink:0; }
+    .member-photo-placeholder {
+      width:44px; height:44px; border-radius:50%; border:2px solid var(--gold);
+      background:var(--mid); display:flex; align-items:center; justify-content:center;
+      font-family:'Playfair Display',serif; font-size:1.1rem; color:var(--gold); flex-shrink:0;
+    }
+    .welcome-text { display:flex; flex-direction:column; }
+    .welcome-label { font-size:0.72rem; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted); }
+    .welcome-name { font-family:'Playfair Display',serif; font-size:1.1rem; font-weight:600; color:var(--white); line-height:1.2; }
+    .btn-signout {
+      background:transparent; border:1px solid rgba(255,255,255,0.15); border-radius:8px;
+      padding:0.5rem 1rem; color:var(--muted); font-family:'DM Sans',sans-serif;
+      font-size:0.82rem; cursor:pointer; transition:border-color 0.2s,color 0.2s; white-space:nowrap;
+    }
+    .btn-signout:hover { border-color:var(--gold); color:var(--gold); }
+
+    .welcome-banner {
+      display:flex; align-items:center; gap:2rem; padding:2rem 2.5rem;
+      background:rgba(201,168,76,0.06); border-bottom:1px solid rgba(201,168,76,0.15);
+      animation:fadeUp 0.5s ease both;
+    }
+    .welcome-banner-photo { width:90px; height:90px; border-radius:50%; object-fit:cover; border:3px solid var(--gold); background:var(--mid); flex-shrink:0; }
+    .welcome-banner-placeholder {
+      width:90px; height:90px; border-radius:50%; border:3px solid var(--gold);
+      background:var(--mid); display:flex; align-items:center; justify-content:center;
+      font-family:'Playfair Display',serif; font-size:2rem; color:var(--gold); flex-shrink:0;
+    }
+    .welcome-banner-text { display:flex; flex-direction:column; gap:0.25rem; }
+    .welcome-banner-label { font-size:0.78rem; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted); }
+    .welcome-banner-name { font-family:'Playfair Display',serif; font-size:2rem; font-weight:600; color:var(--white); line-height:1.2; }
+    .welcome-banner-sub { font-size:0.88rem; color:var(--muted); margin-top:0.25rem; }
+
+    .portal-body { flex:1; padding:2rem 2.5rem; display:flex; flex-direction:column; gap:1.5rem; }
+
+    .loading-state {
+      display:flex; align-items:center; justify-content:center; flex:1;
+      flex-direction:column; gap:1rem; color:var(--muted); font-size:0.9rem; min-height:300px;
+    }
+    .spinner { width:32px; height:32px; border:2px solid rgba(201,168,76,0.2); border-top-color:var(--gold); border-radius:50%; animation:spin 0.8s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .error-state { display:none; padding:2rem; background:rgba(220,60,60,0.08); border:1px solid rgba(220,60,60,0.2); border-radius:var(--radius); color:#f08080; font-size:0.9rem; line-height:1.6; }
+
+    /* ── DASHBOARD CHARTS ── */
+    #dashboard-content { display:none; flex-direction:column; gap:2rem; animation:fadeUp 0.5s ease both; }
+
+    .stat-cards { display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:1rem; }
+    .stat-card {
+      background:var(--mid); border:1px solid rgba(201,168,76,0.15); border-radius:var(--radius);
+      padding:1.25rem 1.5rem; display:flex; flex-direction:column; gap:0.4rem;
+    }
+    .stat-card-label { font-size:0.72rem; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted); }
+    .stat-card-value { font-family:'Playfair Display',serif; font-size:1.8rem; font-weight:600; color:var(--white); line-height:1; }
+    .stat-card-change { font-size:0.8rem; margin-top:0.25rem; }
+    .stat-card-change.positive { color:#ffe300; }
+    .stat-card-change.negative { color:#f08080; }
+    .stat-card-change.neutral { color:var(--muted); }
+
+    .section-title {
+      font-family:'Playfair Display',serif; font-size:1.1rem; font-weight:600;
+      color:var(--gold); margin-bottom:0.25rem;
+    }
+    .section-sub { font-size:0.82rem; color:var(--muted); margin-bottom:1rem; }
+
+    .chart-card {
+      background:var(--mid); border:1px solid rgba(201,168,76,0.12); border-radius:var(--radius);
+      padding:1.5rem;
+    }
+    .chart-wrap { position:relative; height:260px; }
+
+    .charts-grid { display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; }
+
+    .no-data {
+      display:flex; align-items:center; justify-content:center; height:200px;
+      color:var(--muted); font-size:0.88rem; font-style:italic;
+    }
+
+    /* ── VERIFIED SCREEN ── */
+    #verified-screen {
+      display:none; min-height:100vh; align-items:center; justify-content:center;
+      background:var(--black); flex-direction:column; gap:1rem;
+    }
+    #verified-screen .spinner { width:40px; height:40px; }
+    #verified-screen p { color:var(--muted); font-size:0.9rem; }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 768px) {
+      .charts-grid { grid-template-columns:1fr; }
+    }
+    @media (max-width: 600px) {
+      .portal-header { padding:0.85rem 1rem; gap:0.75rem; }
+      .header-logo { height:36px; }
+      .welcome-text { display:none; }
+      .btn-signout { padding:0.4rem 0.75rem; font-size:0.75rem; }
+      .welcome-banner { padding:1.25rem 1rem; gap:1rem; }
+      .welcome-banner-photo, .welcome-banner-placeholder { width:60px; height:60px; font-size:1.4rem; }
+      .welcome-banner-name { font-size:1.4rem; }
+      .portal-body { padding:1rem 0.75rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── LOGIN SCREEN ── -->
+  <div id="login-screen">
+    <div class="login-card">
+      <div class="login-logo">Fit to Last</div>
+      <div class="login-tagline">Client Portal</div>
+      <h2>Welcome back</h2>
+      <p>Enter your email address and we'll send you a secure login link — no password needed.</p>
+      <div class="input-group">
+        <label for="email-input">Email address</label>
+        <input type="email" id="email-input" placeholder="you@example.com" autocomplete="email" />
+      </div>
+      <button class="btn-primary" id="send-link-btn">Send my login link</button>
+      <div class="message" id="login-message"></div>
+    </div>
+  </div>
+
+  <!-- ── VERIFYING SCREEN ── -->
+  <div id="verified-screen">
+    <div class="spinner"></div>
+    <p>Signing you in…</p>
+  </div>
+
+  <!-- ── PORTAL SCREEN ── -->
+  <div id="portal-screen">
+    <header class="portal-header">
+      <img src="FTL_Logo.png" alt="Fit to Last" style="height:48px;width:auto;object-fit:contain;">
+      <button class="btn-signout" id="signout-btn">Sign out</button>
+    </header>
+
+    <div class="welcome-banner" id="welcome-banner">
+      <div id="banner-photo-wrap"></div>
+      <div class="welcome-banner-text">
+        <span class="welcome-banner-label">Welcome back</span>
+        <span class="welcome-banner-name" id="banner-name">Loading…</span>
+        <span class="welcome-banner-sub">Here's your latest fitness progress</span>
+      </div>
+    </div>
+
+    <main class="portal-body">
+      <div class="loading-state" id="loading-state">
+        <div class="spinner"></div>
+        <span>Loading your dashboard…</span>
+      </div>
+      <div class="error-state" id="error-state"></div>
+
+      <!-- ── CHARTS ── -->
+      <div id="dashboard-content">
+
+        <!-- Stat cards -->
+        <div class="stat-cards" id="stat-cards"></div>
+
+        <!-- Body composition charts -->
+        <div>
+          <div class="section-title">Body Composition</div>
+          <div class="section-sub">Your 3D Health Review results</div>
+          <div class="charts-grid">
+            <div class="chart-card">
+              <div style="font-size:0.82rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:1rem;">Body Fat %</div>
+              <div class="chart-wrap"><canvas id="chart-bodyfat"></canvas></div>
+            </div>
+            <div class="chart-card">
+              <div style="font-size:0.82rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:1rem;">Lean Mass (kg)</div>
+              <div class="chart-wrap"><canvas id="chart-leanmass"></canvas></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Strength charts (shown only if strength data exists) -->
+        <div id="strength-section" style="display:none">
+          <div class="section-title">Strength Progress</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:0.75rem;">
+            <div class="section-sub" style="margin-bottom:0">1 Rep Max estimates across all exercises</div>
+            <select id="exercise-filter" style="background:#1e1e1e;border:1px solid rgba(255,230,0,0.3);border-radius:8px;color:#f7f5f0;font-family:'DM Sans',sans-serif;font-size:0.85rem;padding:0.4rem 0.75rem;outline:none;cursor:pointer;">
+            </select>
+          </div>
+          <div class="charts-grid">
+            <div class="chart-card">
+              <div style="font-size:0.82rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:1rem;">1RM Over Time (kg)</div>
+              <div class="chart-wrap"><canvas id="chart-1rm"></canvas></div>
+            </div>
+            <div class="chart-card">
+              <div style="font-size:0.82rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:1rem;">% Change in Strength vs Starting Point</div>
+              <div class="chart-wrap"><canvas id="chart-pct-change"></canvas></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Body comp % change chart (shown only if NO strength data) -->
+        <div id="bodycomp-pct-section" style="display:none">
+          <div class="section-title">Body Composition Progress</div>
+          <div class="section-sub">% change in body fat and lean mass vs your starting point</div>
+          <div class="charts-grid">
+            <div class="chart-card" style="grid-column: 1 / -1">
+              <div style="font-size:0.82rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:1rem;">% Change vs Starting Point</div>
+              <div class="chart-wrap"><canvas id="chart-bodycomp-pct"></canvas></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script>
+    const SUPABASE_URL      = "https://uoatrmectclmddlakanl.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVvYXRybWVjdGNsbWRkbGFrYW5sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2NzU1MjQsImV4cCI6MjA4OTI1MTUyNH0.kHvsHqDlVJuGX3SRNOTVTAEjxIJiC-VoJxCC7R6SewI";
+    const PROFILES_TABLE    = "client_profiles";
+
+    // ── Dates are dd/mm/yyyy in the sheet — parse them correctly
+    function parseSheetDate(str) {
+      if (!str) return null;
+      const parts = str.split('/');
+      if (parts.length === 3) return new Date(+parts[2], +parts[1] - 1, +parts[0]);
+      return new Date(str);
+    }
+
+    // Parse a Capture Date that may be a proper DD/MM/YYYY string or a
+    // serialised date object showing as "Mon Mar 26 1900 ..."
+    // Converts back to DD/MM/YYYY
+    function parseCaptureDate(val) {
+      if (!val || val === '') return '';
+      const s = String(val).trim();
+
+      // Already DD/MM/YYYY — return as is
+      if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return s;
+
+      // Date string like "Mon Mar 26 1900 16:48:00 GMT+0000 ..."
+      // This is an Excel date serial stored as a JS Date toString()
+      // The serial number is encoded in the time: hours*3600 + mins*60 seconds from midnight
+      // representing fractional days. We need to recover the original number.
+      if (s.includes('1900')) {
+        const d = new Date(s);
+        if (!isNaN(d)) {
+          const epoch = new Date(1899, 11, 30);
+          // Total milliseconds from epoch including time fraction
+          const ms = d - epoch;
+          const days = ms / (1000 * 60 * 60 * 24);
+          // Round to nearest integer to get the original serial
+          const serial = Math.round(days);
+          // Now convert serial back to a real date
+          const realDate = new Date(1899, 11, 30);
+          realDate.setDate(realDate.getDate() + serial);
+          const dd   = String(realDate.getDate()).padStart(2, '0');
+          const mm   = String(realDate.getMonth() + 1).padStart(2, '0');
+          const yyyy = realDate.getFullYear();
+          // But wait — if the year is still 1900, this is actually a weight/number
+          // not a real capture date. Return empty.
+          if (yyyy <= 1900) return '';
+          return dd + '/' + mm + '/' + yyyy;
+        }
+      }
+      return s;
+    }
+
+    // Parse a 1RM/weight value that may have been serialised as a 1900-era date
+    // e.g. "04/21/1900" = day 111 from Excel epoch = 111 kg
+    function parse1RM(val) {
+      if (!val || val === '') return null;
+      // Check if it looks like a 1900-era date
+      const match = String(val).match(/^(\d{1,2})\/(\d{1,2})\/1900$/);
+      if (match) {
+        const month = parseInt(match[1]);
+        const day   = parseInt(match[2]);
+        const d     = new Date(1900, month - 1, day);
+        const epoch = new Date(1899, 11, 30);
+        return Math.round((d - epoch) / (1000 * 60 * 60 * 24));
+      }
+      const n = parseFloat(val);
+      return isNaN(n) || n === 0 ? null : n;
+    }
+
+    function formatDateLabel(str) {
+      const d = parseSheetDate(str);
+      if (!d || isNaN(d)) return str;
+      return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' });
+    }
+
+    // Register the datalabels plugin globally
+    Chart.register(ChartDataLabels);
+
+    const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: { headers: { apikey: SUPABASE_ANON_KEY, Authorization: "Bearer " + SUPABASE_ANON_KEY } }
+    });
+
+    const CHART_DEFAULTS = {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: '#aaa', font: { family: 'DM Sans', size: 11 }, boxWidth: 12 } },
+        tooltip: {
+          backgroundColor: '#1e1e1e',
+          borderColor: 'rgba(201,168,76,0.3)',
+          borderWidth: 1,
+          titleColor: '#c9a84c',
+          bodyColor: '#f7f5f0',
+          padding: 10,
+          callbacks: {
+            label: ctx => {
+              const v = ctx.parsed.y;
+              if (v == null) return '';
+              const label = ctx.dataset.label ? ctx.dataset.label + ': ' : '';
+              return label + parseFloat(v).toFixed(1);
+            }
+          }
+        },
+        datalabels: {
+          display: false
+        }
+      },
+      scales: {
+        x: { ticks: { color: '#666', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.04)' } },
+        y: { ticks: { color: '#666', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.06)' } }
+      }
+    };
+
+    const COLORS = ['#ffe300','#ffe300','#ffe300','#ffe300','#ffe300','#ffe300','#ffe300','#ffe300'];
+
+    function lineDataset(label, data, colorIdx = 0) {
+      const c = COLORS[colorIdx % COLORS.length];
+      return {
+        label, data,
+        borderColor: c,
+        backgroundColor: c + '22',
+        pointBackgroundColor: c,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        tension: 0.3,
+        fill: false
+      };
+    }
+
+    function barDataset(label, data, colorIdx = 0) {
+      const c = COLORS[colorIdx % COLORS.length];
+      return {
+        label, data,
+        backgroundColor: c + 'bb',
+        borderColor: c,
+        borderWidth: 1,
+        borderRadius: 4,
+        hoverBackgroundColor: c
+      };
+    }
+
+    function show(id) {
+      ['login-screen','portal-screen','verified-screen'].forEach(s => {
+        const el = document.getElementById(s);
+        el.style.display = (s === id) ? 'flex' : 'none';
+      });
+    }
+
+    function showMessage(el, type, text) {
+      el.className = 'message ' + type;
+      el.textContent = text;
+    }
+
+    function initialsEl(name) {
+      const parts = (name || '').trim().split(' ');
+      const ini = ((parts[0]||'')[0]||'') + ((parts[1]||'')[0]||'');
+      return '<div class="member-photo-placeholder">' + ini.toUpperCase() + '</div>';
+    }
+
+    async function sendMagicLink() {
+      const email = document.getElementById('email-input').value.trim();
+      const btn   = document.getElementById('send-link-btn');
+      const msg   = document.getElementById('login-message');
+      if (!email || !email.includes('@')) {
+        showMessage(msg, 'error', 'Please enter a valid email address.');
+        return;
+      }
+      btn.disabled = true;
+      btn.textContent = 'Sending…';
+      msg.className = 'message';
+      const redirectTo = window.location.href.split('#')[0];
+      const { error } = await sbClient.auth.signInWithOtp({ email, options: { emailRedirectTo: redirectTo } });
+      if (error) {
+        showMessage(msg, 'error', 'Something went wrong. Please try again.');
+        btn.disabled = false;
+        btn.textContent = 'Send my login link';
+      } else {
+        showMessage(msg, 'success', '✓ Check your inbox — your login link is on its way.');
+        btn.textContent = 'Link sent!';
+      }
+    }
+
+    async function signOut() {
+      await sbClient.auth.signOut();
+      show('login-screen');
+    }
+
+    // ── FETCH CLIENT DATA FROM NETLIFY FUNCTION ──────────
+    async function fetchClientData(email) {
+      const res = await fetch(`/.netlify/functions/get-client-data?email=${encodeURIComponent(email)}`);
+      if (!res.ok) throw new Error('Data fetch failed: ' + res.status);
+      return res.json();
+    }
+
+    // ── RENDER STAT CARDS ────────────────────────────────
+    function renderStatCards(scanData) {
+      const container = document.getElementById('stat-cards');
+      if (!scanData.length) { container.innerHTML = ''; return; }
+
+      const sorted = [...scanData]
+        .map(r => ({ ...r, 'Capture Date': parseCaptureDate(r['Capture Date']) }))
+        .filter(r => r['Capture Date'] !== '')
+        .sort((a, b) => parseSheetDate(a['Capture Date']) - parseSheetDate(b['Capture Date']));
+      const latest = sorted[sorted.length - 1];
+      const first  = sorted[0];
+
+      function card(label, value, unit, first, latest, lowerIsBetter = false) {
+        const fVal = parseFloat(first);
+        const lVal = parseFloat(latest);
+        let changeHtml = '';
+        if (!isNaN(fVal) && !isNaN(lVal) && fVal !== lVal) {
+          const diff = lVal - fVal;
+          const pct  = ((diff / fVal) * 100).toFixed(1);
+          const improved = lowerIsBetter ? diff < 0 : diff > 0;
+          const cls = improved ? 'positive' : 'negative';
+          const sign = diff > 0 ? '+' : '';
+          changeHtml = `<div class="stat-card-change ${cls}">${sign}${diff.toFixed(1)}${unit} since start</div>`;
+        }
+        return `
+          <div class="stat-card">
+            <div class="stat-card-label">${label}</div>
+            <div class="stat-card-value">${parseFloat(value).toFixed(1)}<span style="font-size:1rem;color:var(--muted)">${unit}</span></div>
+            ${changeHtml}
+          </div>`;
+      }
+
+      container.innerHTML =
+        card('Body Fat', latest['Body Fat %'], '%', first['Body Fat %'], latest['Body Fat %'], true) +
+        card('Lean Mass', latest['Lean Mass'], 'kg', first['Lean Mass'], latest['Lean Mass'], false) +
+        `<div class="stat-card">
+          <div class="stat-card-label">Scans recorded</div>
+          <div class="stat-card-value">${scanData.length}</div>
+        </div>`;
+    }
+
+    // ── RENDER BODY COMP CHARTS ──────────────────────────
+    function renderBodyCompCharts(scanData) {
+      if (!scanData.length) {
+        document.getElementById('chart-bodyfat').parentElement.innerHTML = '<div class="no-data">No scan data yet</div>';
+        document.getElementById('chart-leanmass').parentElement.innerHTML = '<div class="no-data">No scan data yet</div>';
+        return;
+      }
+
+      const sorted = [...scanData]
+        .map(r => ({ ...r, 'Capture Date': parseCaptureDate(r['Capture Date']) }))
+        .filter(r => r['Capture Date'] !== '')
+        .sort((a, b) => parseSheetDate(a['Capture Date']) - parseSheetDate(b['Capture Date']));
+      const labels = sorted.map(r => formatDateLabel(r['Capture Date']));
+
+      const lineOpts = (unit) => ({
+        ...CHART_DEFAULTS,
+        plugins: {
+          ...CHART_DEFAULTS.plugins,
+          legend: { display: false },
+          datalabels: {
+            ...CHART_DEFAULTS.plugins.datalabels,
+            formatter: v => v == null ? '' : v.toFixed(1) + unit
+          }
+        }
+      });
+
+      const bfData  = sorted.map(r => { const v = parseFloat(r['Body Fat %']); return isNaN(v) ? null : v; });
+      const lmData  = sorted.map(r => { const v = parseFloat(r['Lean Mass']);   return isNaN(v) ? null : v; });
+
+      // For single data points, use a scatter-style point so it's visible
+      const singlePoint = sorted.length === 1;
+
+      new Chart(document.getElementById('chart-bodyfat'), {
+        type: 'line',
+        data: { labels, datasets: [{ ...lineDataset('Body Fat %', bfData, 0), pointRadius: singlePoint ? 8 : 4, pointHoverRadius: singlePoint ? 10 : 6 }] },
+        options: lineOpts('%')
+      });
+
+      new Chart(document.getElementById('chart-leanmass'), {
+        type: 'line',
+        data: { labels, datasets: [{ ...lineDataset('Lean Mass (kg)', lmData, 1), pointRadius: singlePoint ? 8 : 4, pointHoverRadius: singlePoint ? 10 : 6 }] },
+        options: lineOpts(' kg')
+      });
+    }
+
+    // ── RENDER STRENGTH CHARTS (or body comp % change if no strength data) ──
+    function renderStrengthCharts(strengthData, scanData) {
+      const strengthSection  = document.getElementById('strength-section');
+      const bodycompSection  = document.getElementById('bodycomp-pct-section');
+
+      if (!strengthData.length) {
+        // ── No strength data: show body comp % change instead
+        bodycompSection.style.display = 'block';
+
+        if (!scanData.length) return;
+        const sorted = [...scanData]
+          .map(r => ({ ...r, 'Capture Date': parseCaptureDate(r['Capture Date']) }))
+          .filter(r => r['Capture Date'] !== '')
+          .sort((a, b) => parseSheetDate(a['Capture Date']) - parseSheetDate(b['Capture Date']));
+        const labels = sorted.map(r => formatDateLabel(r['Capture Date']));
+
+        const firstBF  = parseFloat(sorted[0]['Body Fat %']);
+        const firstLM  = parseFloat(sorted[0]['Lean Mass']);
+
+        const bfPct  = sorted.map(r => { const v = parseFloat(r['Body Fat %']); return (firstBF && !isNaN(v)) ? (((v - firstBF) / firstBF) * 100) : null; });
+        const lmPct  = sorted.map(r => { const v = parseFloat(r['Lean Mass']);   return (firstLM && !isNaN(v)) ? (((v - firstLM) / firstLM) * 100) : null; });
+
+        new Chart(document.getElementById('chart-bodycomp-pct'), {
+          type: 'line',
+          data: { labels, datasets: [
+            lineDataset('Body Fat %', bfPct, 0),
+            lineDataset('Lean Mass',  lmPct, 1)
+          ]},
+          options: {
+            ...CHART_DEFAULTS,
+            spanGaps: true,
+            plugins: {
+              ...CHART_DEFAULTS.plugins,
+              datalabels: {
+                ...CHART_DEFAULTS.plugins.datalabels,
+                formatter: v => v == null ? '' : v.toFixed(1) + '%'
+              }
+            },
+            scales: {
+              ...CHART_DEFAULTS.scales,
+              y: {
+                ...CHART_DEFAULTS.scales.y,
+                ticks: { ...CHART_DEFAULTS.scales.y.ticks, callback: v => v.toFixed(0) + '%' }
+              }
+            }
+          }
+        });
+        return;
+      }
+
+      // ── Strength data exists: show strength charts
+      strengthSection.style.display = 'block';
+
+      // Group by exercise type, sort each by date
+      const byType = {};
+      strengthData.forEach(r => {
+        const type = r['Type'] || 'Unknown';
+        if (!byType[type]) byType[type] = [];
+        byType[type].push(r);
+      });
+      Object.values(byType).forEach(arr => arr.sort((a, b) => parseSheetDate(a['Date']) - parseSheetDate(b['Date'])));
+
+      const exerciseTypes = Object.keys(byType);
+
+      // Populate filter dropdown — one option per exercise, default to first
+      const filterEl = document.getElementById('exercise-filter');
+      filterEl.innerHTML = '';
+      exerciseTypes.forEach(type => {
+        const opt = document.createElement('option');
+        opt.value = type;
+        opt.textContent = type;
+        filterEl.appendChild(opt);
+      });
+
+      let chart1rm = null;
+      let chartPct = null;
+
+      function buildCharts(selectedExercise) {
+        const activeTypes = [selectedExercise];
+
+        // All dates for selected exercises — sorted chronologically, shown as ordinal
+        const activeDates = [...new Set(
+          strengthData.filter(r => activeTypes.includes(r['Type'])).map(r => r['Date'])
+        )].sort((a, b) => parseSheetDate(a) - parseSheetDate(b));
+        const labels = activeDates.map(formatDateLabel);
+
+        // 1RM line chart — one line per selected exercise, all yellow
+        const datasets1rm = activeTypes.map(type => {
+          const data = activeDates.map(date => {
+            const match = byType[type].find(r => r['Date'] === date);
+            return match ? parse1RM(match['1RM']) : null;
+          });
+          return {
+            label: type,
+            data,
+            borderColor: '#ffe300',
+            backgroundColor: 'rgba(255,227,0,0.08)',
+            pointBackgroundColor: '#ffe300',
+            pointRadius: 4,
+            pointHoverRadius: 6,
+            tension: 0.3,
+            fill: false
+          };
+        });
+
+        if (chart1rm) chart1rm.destroy();
+        chart1rm = new Chart(document.getElementById('chart-1rm'), {
+          type: 'line',
+          data: { labels, datasets: datasets1rm },
+          options: {
+            ...CHART_DEFAULTS,
+            spanGaps: true,
+            plugins: { ...CHART_DEFAULTS.plugins },
+            scales: {
+              ...CHART_DEFAULTS.scales,
+              y: { ...CHART_DEFAULTS.scales.y, ticks: { ...CHART_DEFAULTS.scales.y.ticks, callback: v => v + ' kg' } }
+            }
+          }
+        });
+
+        // % change bars — one bar per selected exercise, all yellow
+        const pctDatasets = activeTypes.map(type => {
+          const rows = byType[type];
+          const firstVal = parse1RM(rows[0]['1RM']);
+          const lastVal  = parse1RM(rows[rows.length - 1]['1RM']);
+          const pct = (!firstVal || !lastVal) ? 0 : (((lastVal - firstVal) / firstVal) * 100);
+          return {
+            label: type,
+            data: [pct],
+            backgroundColor: 'rgba(255,227,0,0.7)',
+            borderColor: '#ffe300',
+            borderWidth: 1,
+            borderRadius: 4,
+            hoverBackgroundColor: '#ffe300'
+          };
+        });
+
+        // Calculate dynamic y-axis range with headroom for labels
+        const pctValues = pctDatasets.map(d => d.data[0]).filter(v => v != null);
+        const maxPct = Math.max(...pctValues, 0);
+        const minPct = Math.min(...pctValues, 0);
+        const pctRange = maxPct - minPct;
+        const yMax = maxPct + pctRange * 0.3 + 10; // 30% headroom + 10% buffer
+        const yMin = minPct < 0 ? minPct - pctRange * 0.1 : 0;
+
+        if (chartPct) chartPct.destroy();
+        chartPct = new Chart(document.getElementById('chart-pct-change'), {
+          type: 'bar',
+          data: { labels: ['Overall % Change'], datasets: pctDatasets },
+          options: {
+            ...CHART_DEFAULTS,
+            layout: { padding: { top: 8, bottom: 8, left: 8, right: 8 } },
+            plugins: {
+              ...CHART_DEFAULTS.plugins,
+              datalabels: {
+                display: true,
+                color: '#ffe300',
+                font: { family: 'DM Sans', size: 11, weight: '500' },
+                anchor: 'end',
+                align: 'top',
+                offset: 4,
+                clamp: false,
+                clip: false,
+                formatter: v => v == null ? '' : (v > 0 ? '+' : '') + v.toFixed(1) + '%'
+              }
+            },
+            scales: {
+              ...CHART_DEFAULTS.scales,
+              y: {
+                ...CHART_DEFAULTS.scales.y,
+                min: yMin,
+                max: yMax,
+                ticks: { ...CHART_DEFAULTS.scales.y.ticks, callback: v => v.toFixed(0) + '%' }
+              }
+            }
+          }
+        });
+      }
+
+      buildCharts(exerciseTypes[0]);
+      filterEl.addEventListener('change', e => buildCharts(e.target.value));
+    }
+
+    // ── LOAD PORTAL ──────────────────────────────────────
+    async function loadPortal(email) {
+      show('portal-screen');
+
+      let memberName = email.split('@')[0];
+      let displayName = memberName;
+      let photoUrl = null;
+
+      try {
+        const { data, error } = await sbClient
+          .from(PROFILES_TABLE)
+          .select('member_name, first_name, photo_url')
+          .ilike('email', email)
+          .limit(1)
+          .single();
+        if (!error && data) {
+          memberName  = data.member_name || memberName;
+          displayName = data.first_name  || memberName;
+          photoUrl    = data.photo_url   || null;
+        }
+      } catch(e) { console.warn('Profile fetch:', e.message); }
+
+      // Names
+      document.getElementById("banner-name").textContent = displayName || memberName;
+
+      // Banner photo
+      const bannerWrap  = document.getElementById("banner-photo-wrap");
+      const bannerName  = displayName || memberName || '';
+      const bannerParts = bannerName.trim().split(' ');
+      const bannerIni   = ((bannerParts[0]||'')[0]||'') + ((bannerParts[1]||'')[0]||'');
+      if (photoUrl) {
+        const img = document.createElement('img');
+        img.className = 'welcome-banner-photo';
+        img.src = photoUrl; img.alt = bannerName;
+        img.onerror = function() {
+          const div = document.createElement('div');
+          div.className = 'welcome-banner-placeholder';
+          div.textContent = bannerIni.toUpperCase();
+          this.parentNode.replaceChild(div, this);
+        };
+        bannerWrap.appendChild(img);
+      } else {
+        const div = document.createElement('div');
+        div.className = 'welcome-banner-placeholder';
+        div.textContent = bannerIni.toUpperCase();
+        bannerWrap.appendChild(div);
+      }
+
+      // Fetch data & render charts
+      try {
+        const { scanData, strengthData } = await fetchClientData(email);
+        document.getElementById('loading-state').style.display = 'none';
+        document.getElementById('dashboard-content').style.display = 'flex';
+        renderStatCards(scanData);
+        renderBodyCompCharts(scanData);
+        renderStrengthCharts(strengthData, scanData);
+      } catch(e) {
+        document.getElementById('loading-state').style.display = 'none';
+        const err = document.getElementById('error-state');
+        err.style.display = 'block';
+        err.textContent = 'Could not load your dashboard. Please try refreshing.';
+        console.error(e);
+      }
+    }
+
+    // ── INIT ─────────────────────────────────────────────
+    window.addEventListener('load', async () => {
+      document.getElementById('send-link-btn').addEventListener('click', sendMagicLink);
+      document.getElementById('signout-btn').addEventListener('click', signOut);
+      document.getElementById('email-input').addEventListener('keydown', e => {
+        if (e.key === 'Enter') sendMagicLink();
+      });
+
+      // ── PREVIEW MODE ─────────────────────────────────────
+      // Access via ?preview=client@email.com
+      // Only works when the URL also contains the preview secret key
+      // e.g. ?preview=ali@email.com&key=ftl-preview-2026
+      const urlParams  = new URLSearchParams(window.location.search);
+      const previewEmail = urlParams.get('preview');
+      const previewKey   = urlParams.get('key');
+      const PREVIEW_SECRET = 'ftl-preview-2026';
+
+      if (previewEmail && previewKey === PREVIEW_SECRET) {
+        history.replaceState(null, '', window.location.pathname);
+        await loadPortal(previewEmail);
+        return;
+      }
+
+      // Handle magic link callback
+      const hash = window.location.hash;
+      if (hash && hash.includes('access_token')) {
+        show('verified-screen');
+        const { data, error } = await sbClient.auth.getSession();
+        if (!error && data.session) {
+          history.replaceState(null, '', window.location.pathname);
+          await loadPortal(data.session.user.email);
+        } else { show('login-screen'); }
+        return;
+      }
+
+      // Check existing session
+      const { data: { session } } = await sbClient.auth.getSession();
+      if (session) {
+        await loadPortal(session.user.email);
+      } else {
+        show('login-screen');
+      }
+    });
+  </script>
+</body>
+</html>
