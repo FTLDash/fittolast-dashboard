@@ -457,7 +457,7 @@
 
     // ── FETCH CLIENT DATA FROM NETLIFY FUNCTION ──────────
     async function fetchClientData(email) {
-      const res = await fetch(`/.netlify/functions/get-client-data?email=${encodeURIComponent(email)}`);
+      const res = await fetch(`/functions/get-client-data?email=${encodeURIComponent(email)}`);
       if (!res.ok) throw new Error('Data fetch failed: ' + res.status);
       return res.json();
     }
