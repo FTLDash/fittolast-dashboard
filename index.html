@@ -274,7 +274,6 @@
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVvYXRybWVjdGNsbWRkbGFrYW5sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2NzU1MjQsImV4cCI6MjA4OTI1MTUyNH0.kHvsHqDlVJuGX3SRNOTVTAEjxIJiC-VoJxCC7R6SewI";
     const PROFILES_TABLE    = "client_profiles";
 
-    // ── Dates are dd/mm/yyyy in the sheet — parse them correctly
     function parseSheetDate(str) {
       if (!str) return null;
       const parts = str.split('/');
@@ -282,37 +281,22 @@
       return new Date(str);
     }
 
-    // Parse a Capture Date that may be a proper DD/MM/YYYY string or a
-    // serialised date object showing as "Mon Mar 26 1900 ..."
-    // Converts back to DD/MM/YYYY
     function parseCaptureDate(val) {
       if (!val || val === '') return '';
       const s = String(val).trim();
-
-      // Already DD/MM/YYYY — return as is
       if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return s;
-
-      // Date string like "Mon Mar 26 1900 16:48:00 GMT+0000 ..."
-      // This is an Excel date serial stored as a JS Date toString()
-      // The serial number is encoded in the time: hours*3600 + mins*60 seconds from midnight
-      // representing fractional days. We need to recover the original number.
       if (s.includes('1900')) {
         const d = new Date(s);
         if (!isNaN(d)) {
           const epoch = new Date(1899, 11, 30);
-          // Total milliseconds from epoch including time fraction
           const ms = d - epoch;
           const days = ms / (1000 * 60 * 60 * 24);
-          // Round to nearest integer to get the original serial
           const serial = Math.round(days);
-          // Now convert serial back to a real date
           const realDate = new Date(1899, 11, 30);
           realDate.setDate(realDate.getDate() + serial);
           const dd   = String(realDate.getDate()).padStart(2, '0');
           const mm   = String(realDate.getMonth() + 1).padStart(2, '0');
           const yyyy = realDate.getFullYear();
-          // But wait — if the year is still 1900, this is actually a weight/number
-          // not a real capture date. Return empty.
           if (yyyy <= 1900) return '';
           return dd + '/' + mm + '/' + yyyy;
         }
@@ -320,11 +304,8 @@
       return s;
     }
 
-    // Parse a 1RM/weight value that may have been serialised as a 1900-era date
-    // e.g. "04/21/1900" = day 111 from Excel epoch = 111 kg
     function parse1RM(val) {
       if (!val || val === '') return null;
-      // Check if it looks like a 1900-era date
       const match = String(val).match(/^(\d{1,2})\/(\d{1,2})\/1900$/);
       if (match) {
         const month = parseInt(match[1]);
@@ -343,7 +324,6 @@
       return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' });
     }
 
-    // Register the datalabels plugin globally
     Chart.register(ChartDataLabels);
 
     const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -371,9 +351,7 @@
             }
           }
         },
-        datalabels: {
-          display: false
-        }
+        datalabels: { display: false }
       },
       scales: {
         x: { ticks: { color: '#666', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.04)' } },
@@ -455,14 +433,13 @@
       show('login-screen');
     }
 
-    // ── FETCH CLIENT DATA FROM NETLIFY FUNCTION ──────────
+    // ── FETCH CLIENT DATA FROM CLOUDFLARE WORKER ──────────
     async function fetchClientData(email) {
-      const res = await fetch(`/functions/get-client-data?email=${encodeURIComponent(email)}`);
+      const res = await fetch(`https://crimson-mountain-7711ftl-client-data.james-130.workers.dev?email=${encodeURIComponent(email)}`);
       if (!res.ok) throw new Error('Data fetch failed: ' + res.status);
       return res.json();
     }
 
-    // ── RENDER STAT CARDS ────────────────────────────────
     function renderStatCards(scanData) {
       const container = document.getElementById('stat-cards');
       if (!scanData.length) { container.innerHTML = ''; return; }
@@ -503,7 +480,6 @@
         </div>`;
     }
 
-    // ── RENDER BODY COMP CHARTS ──────────────────────────
     function renderBodyCompCharts(scanData) {
       if (!scanData.length) {
         document.getElementById('chart-bodyfat').parentElement.innerHTML = '<div class="no-data">No scan data yet</div>';
@@ -531,8 +507,6 @@
 
       const bfData  = sorted.map(r => { const v = parseFloat(r['Body Fat %']); return isNaN(v) ? null : v; });
       const lmData  = sorted.map(r => { const v = parseFloat(r['Lean Mass']);   return isNaN(v) ? null : v; });
-
-      // For single data points, use a scatter-style point so it's visible
       const singlePoint = sorted.length === 1;
 
       new Chart(document.getElementById('chart-bodyfat'), {
@@ -548,60 +522,43 @@
       });
     }
 
-    // ── RENDER STRENGTH CHARTS (or body comp % change if no strength data) ──
     function renderStrengthCharts(strengthData, scanData) {
       const strengthSection  = document.getElementById('strength-section');
       const bodycompSection  = document.getElementById('bodycomp-pct-section');
 
       if (!strengthData.length) {
-        // ── No strength data: show body comp % change instead
         bodycompSection.style.display = 'block';
-
         if (!scanData.length) return;
         const sorted = [...scanData]
           .map(r => ({ ...r, 'Capture Date': parseCaptureDate(r['Capture Date']) }))
           .filter(r => r['Capture Date'] !== '')
           .sort((a, b) => parseSheetDate(a['Capture Date']) - parseSheetDate(b['Capture Date']));
         const labels = sorted.map(r => formatDateLabel(r['Capture Date']));
-
         const firstBF  = parseFloat(sorted[0]['Body Fat %']);
         const firstLM  = parseFloat(sorted[0]['Lean Mass']);
-
         const bfPct  = sorted.map(r => { const v = parseFloat(r['Body Fat %']); return (firstBF && !isNaN(v)) ? (((v - firstBF) / firstBF) * 100) : null; });
         const lmPct  = sorted.map(r => { const v = parseFloat(r['Lean Mass']);   return (firstLM && !isNaN(v)) ? (((v - firstLM) / firstLM) * 100) : null; });
 
         new Chart(document.getElementById('chart-bodycomp-pct'), {
           type: 'line',
-          data: { labels, datasets: [
-            lineDataset('Body Fat %', bfPct, 0),
-            lineDataset('Lean Mass',  lmPct, 1)
-          ]},
+          data: { labels, datasets: [lineDataset('Body Fat %', bfPct, 0), lineDataset('Lean Mass', lmPct, 1)] },
           options: {
             ...CHART_DEFAULTS,
             spanGaps: true,
             plugins: {
               ...CHART_DEFAULTS.plugins,
-              datalabels: {
-                ...CHART_DEFAULTS.plugins.datalabels,
-                formatter: v => v == null ? '' : v.toFixed(1) + '%'
-              }
+              datalabels: { ...CHART_DEFAULTS.plugins.datalabels, formatter: v => v == null ? '' : v.toFixed(1) + '%' }
             },
             scales: {
               ...CHART_DEFAULTS.scales,
-              y: {
-                ...CHART_DEFAULTS.scales.y,
-                ticks: { ...CHART_DEFAULTS.scales.y.ticks, callback: v => v.toFixed(0) + '%' }
-              }
+              y: { ...CHART_DEFAULTS.scales.y, ticks: { ...CHART_DEFAULTS.scales.y.ticks, callback: v => v.toFixed(0) + '%' } }
             }
           }
         });
         return;
       }
 
-      // ── Strength data exists: show strength charts
       strengthSection.style.display = 'block';
-
-      // Group by exercise type, sort each by date
       const byType = {};
       strengthData.forEach(r => {
         const type = r['Type'] || 'Unknown';
@@ -609,10 +566,8 @@
         byType[type].push(r);
       });
       Object.values(byType).forEach(arr => arr.sort((a, b) => parseSheetDate(a['Date']) - parseSheetDate(b['Date'])));
-
       const exerciseTypes = Object.keys(byType);
 
-      // Populate filter dropdown — one option per exercise, default to first
       const filterEl = document.getElementById('exercise-filter');
       filterEl.innerHTML = '';
       exerciseTypes.forEach(type => {
@@ -627,29 +582,21 @@
 
       function buildCharts(selectedExercise) {
         const activeTypes = [selectedExercise];
-
-        // All dates for selected exercises — sorted chronologically, shown as ordinal
         const activeDates = [...new Set(
           strengthData.filter(r => activeTypes.includes(r['Type'])).map(r => r['Date'])
         )].sort((a, b) => parseSheetDate(a) - parseSheetDate(b));
         const labels = activeDates.map(formatDateLabel);
 
-        // 1RM line chart — one line per selected exercise, all yellow
         const datasets1rm = activeTypes.map(type => {
           const data = activeDates.map(date => {
             const match = byType[type].find(r => r['Date'] === date);
             return match ? parse1RM(match['1RM']) : null;
           });
           return {
-            label: type,
-            data,
-            borderColor: '#ffe300',
-            backgroundColor: 'rgba(255,227,0,0.08)',
-            pointBackgroundColor: '#ffe300',
-            pointRadius: 4,
-            pointHoverRadius: 6,
-            tension: 0.3,
-            fill: false
+            label: type, data,
+            borderColor: '#ffe300', backgroundColor: 'rgba(255,227,0,0.08)',
+            pointBackgroundColor: '#ffe300', pointRadius: 4, pointHoverRadius: 6,
+            tension: 0.3, fill: false
           };
         });
 
@@ -658,39 +605,25 @@
           type: 'line',
           data: { labels, datasets: datasets1rm },
           options: {
-            ...CHART_DEFAULTS,
-            spanGaps: true,
+            ...CHART_DEFAULTS, spanGaps: true,
             plugins: { ...CHART_DEFAULTS.plugins },
-            scales: {
-              ...CHART_DEFAULTS.scales,
-              y: { ...CHART_DEFAULTS.scales.y, ticks: { ...CHART_DEFAULTS.scales.y.ticks, callback: v => v + ' kg' } }
-            }
+            scales: { ...CHART_DEFAULTS.scales, y: { ...CHART_DEFAULTS.scales.y, ticks: { ...CHART_DEFAULTS.scales.y.ticks, callback: v => v + ' kg' } } }
           }
         });
 
-        // % change bars — one bar per selected exercise, all yellow
         const pctDatasets = activeTypes.map(type => {
           const rows = byType[type];
           const firstVal = parse1RM(rows[0]['1RM']);
           const lastVal  = parse1RM(rows[rows.length - 1]['1RM']);
           const pct = (!firstVal || !lastVal) ? 0 : (((lastVal - firstVal) / firstVal) * 100);
-          return {
-            label: type,
-            data: [pct],
-            backgroundColor: 'rgba(255,227,0,0.7)',
-            borderColor: '#ffe300',
-            borderWidth: 1,
-            borderRadius: 4,
-            hoverBackgroundColor: '#ffe300'
-          };
+          return { label: type, data: [pct], backgroundColor: 'rgba(255,227,0,0.7)', borderColor: '#ffe300', borderWidth: 1, borderRadius: 4, hoverBackgroundColor: '#ffe300' };
         });
 
-        // Calculate dynamic y-axis range with headroom for labels
         const pctValues = pctDatasets.map(d => d.data[0]).filter(v => v != null);
         const maxPct = Math.max(...pctValues, 0);
         const minPct = Math.min(...pctValues, 0);
         const pctRange = maxPct - minPct;
-        const yMax = maxPct + pctRange * 0.3 + 10; // 30% headroom + 10% buffer
+        const yMax = maxPct + pctRange * 0.3 + 10;
         const yMin = minPct < 0 ? minPct - pctRange * 0.1 : 0;
 
         if (chartPct) chartPct.destroy();
@@ -703,26 +636,13 @@
             plugins: {
               ...CHART_DEFAULTS.plugins,
               datalabels: {
-                display: true,
-                color: '#ffe300',
+                display: true, color: '#ffe300',
                 font: { family: 'DM Sans', size: 11, weight: '500' },
-                anchor: 'end',
-                align: 'top',
-                offset: 4,
-                clamp: false,
-                clip: false,
+                anchor: 'end', align: 'top', offset: 4, clamp: false, clip: false,
                 formatter: v => v == null ? '' : (v > 0 ? '+' : '') + v.toFixed(1) + '%'
               }
             },
-            scales: {
-              ...CHART_DEFAULTS.scales,
-              y: {
-                ...CHART_DEFAULTS.scales.y,
-                min: yMin,
-                max: yMax,
-                ticks: { ...CHART_DEFAULTS.scales.y.ticks, callback: v => v.toFixed(0) + '%' }
-              }
-            }
+            scales: { ...CHART_DEFAULTS.scales, y: { ...CHART_DEFAULTS.scales.y, min: yMin, max: yMax, ticks: { ...CHART_DEFAULTS.scales.y.ticks, callback: v => v.toFixed(0) + '%' } } }
           }
         });
       }
@@ -731,10 +651,8 @@
       filterEl.addEventListener('change', e => buildCharts(e.target.value));
     }
 
-    // ── LOAD PORTAL ──────────────────────────────────────
     async function loadPortal(email) {
       show('portal-screen');
-
       let memberName = email.split('@')[0];
       let displayName = memberName;
       let photoUrl = null;
@@ -753,10 +671,8 @@
         }
       } catch(e) { console.warn('Profile fetch:', e.message); }
 
-      // Names
       document.getElementById("banner-name").textContent = displayName || memberName;
 
-      // Banner photo
       const bannerWrap  = document.getElementById("banner-photo-wrap");
       const bannerName  = displayName || memberName || '';
       const bannerParts = bannerName.trim().split(' ');
@@ -779,7 +695,6 @@
         bannerWrap.appendChild(div);
       }
 
-      // Fetch data & render charts
       try {
         const { scanData, strengthData } = await fetchClientData(email);
         document.getElementById('loading-state').style.display = 'none';
@@ -796,7 +711,6 @@
       }
     }
 
-    // ── INIT ─────────────────────────────────────────────
     window.addEventListener('load', async () => {
       document.getElementById('send-link-btn').addEventListener('click', sendMagicLink);
       document.getElementById('signout-btn').addEventListener('click', signOut);
@@ -804,10 +718,6 @@
         if (e.key === 'Enter') sendMagicLink();
       });
 
-      // ── PREVIEW MODE ─────────────────────────────────────
-      // Access via ?preview=client@email.com
-      // Only works when the URL also contains the preview secret key
-      // e.g. ?preview=ali@email.com&key=ftl-preview-2026
       const urlParams  = new URLSearchParams(window.location.search);
       const previewEmail = urlParams.get('preview');
       const previewKey   = urlParams.get('key');
@@ -819,7 +729,6 @@
         return;
       }
 
-      // Handle magic link callback
       const hash = window.location.hash;
       if (hash && hash.includes('access_token')) {
         show('verified-screen');
@@ -831,7 +740,6 @@
         return;
       }
 
-      // Check existing session
       const { data: { session } } = await sbClient.auth.getSession();
       if (session) {
         await loadPortal(session.user.email);
